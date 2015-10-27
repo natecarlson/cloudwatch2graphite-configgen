@@ -3,9 +3,15 @@
     "us-east-1",
     "ap-southeast-1"
   ],
+  "services": [
+    "RDS"
+  ],
   "outputmetrics": {
     "RDS": [
       "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"
+    ],
+    "EC2": [
+      "DiskWriteBytes", "DiskReadBytes"
     ]
   }
 } 
