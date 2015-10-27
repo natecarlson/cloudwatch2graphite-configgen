@@ -1,0 +1,11 @@
+{
+  "regions": [
+    "us-east-1",
+    "ap-southeast-1"
+  ],
+  "outputmetrics": {
+    "RDS": [
+      "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"
+    ]
+  }
+} 
