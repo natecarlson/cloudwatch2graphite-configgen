@@ -34,22 +34,24 @@ def generateEC2Config(awsregion)
 
   ec2 = Aws::EC2::Client.new(region: awsregion)
 
-  ec2.describe_instances({ filters: [ { name: "tag:env", values: ["prod"] }, { name: "instance-state-name", values: ["running"] } ]  }).each do |reservations|
+  ec2.describe_instances({ filters: [ { name: "tag:env", values: ["prod"] }, { name: "instance-state-name", values: ["running"] } ] } ).each do |reservations|
     reservations.reservations.each do |reservation|
       reservation.instances.each do |instance|
-		    @instanceid = instance.instance_id
-	  	  ec2instance = Hash.new
-		    ec2instance['id'] = "#@instanceid"
-	  	  ec2instance["tags"] = Hash.new
+        @instanceid = instance.instance_id
+        ec2instance = Hash.new
+        ec2instance['id'] = "#@instanceid"
+        ec2instance['detailedmonitoring'] = instance.monitoring.state
+        ec2instance["tags"] = Hash.new
         instance.tags.each do |tag|
-	  			ec2instance["tags"]["#{tag.key}"]  = "#{tag.value}"
-		  	end
+          ec2instance["tags"]["#{tag.key}"]  = "#{tag.value}"
+        end
         ec2instance["name"] = "#{ec2instance['tags']['Name']}"
-		  	@ec2instances.push(ec2instance)
-  		end
-	  end
+        @ec2instances.push(ec2instance)
+      end
+    end
   end
 
+  # TODO: Need to generate two different files here - one for 1m interval (for hosts with detailed monitoring enabled), and one for a 5m interval
   puts Jason.render(<<-EOS
 {
   "awsCredentials": {
