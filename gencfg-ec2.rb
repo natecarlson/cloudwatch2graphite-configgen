@@ -51,8 +51,9 @@ def generateEC2Config(awsregion)
     end
   end
 
-  # TODO: Need to generate two different files here - one for 1m interval (for hosts with detailed monitoring enabled), and one for a 5m interval
-  puts Jason.render(<<-EOS
+  # TODO - clean this crap up, I don't like how I'm doing this at all. Should only have one routine to build the JSON and have sparate calls for basic vs detailed monitoring..
+  # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
+  $json_1m = Jason.render(<<-EOS
 {
   "awsCredentials": {
     "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
@@ -62,6 +63,7 @@ def generateEC2Config(awsregion)
   "metricsConfig": {
     "metrics": [
 <% @ec2instances.each do |instance| -%>
+<% next if ["disabled","disabling"].include? instance["detailedmonitoring"] -%>
   <% $outputmetrics.each do |metricname| -%>
       {
         "OutputAlias": <%= instance["name"] %>,
@@ -86,6 +88,63 @@ def generateEC2Config(awsregion)
 }
 EOS
   )
+  $json_5m = Jason.render(<<-EOS
+{
+  "awsCredentials": {
+    "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
+    "secretAccessKey": <%= $creds['awsCredentials']['secretAccessKey'] %>,
+    "region": <%= @awsregion %>,
+  },  
+  "metricsConfig": {
+    "metrics": [
+<% @ec2instances.each do |instance| -%>
+<% next if ["enabled","pending"].include? instance["detailedmonitoring"] -%>
+  <% $outputmetrics.each do |metricname| -%>
+      {
+        "OutputAlias": <%= instance["name"] %>,
+        "Namespace": "AWS/EC2",
+        "MetricName": <%= metricname %>,
+        "Period": 300,
+        "Statistics": [
+          "Average"
+        ],
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": <%= instance["id"] %>,
+          }
+        ]
+      },
+  <% end -%>
+<% end -%>
+    ],
+    "carbonNameSpacePrefix": "cloudwatch"
+  }
+}
+EOS
+  )
+
+  # Write 1m file 
+  begin 
+    $out_file_1m = "output/ec2-#{awsregion}-detailed.json"
+    file = File.open($out_file_1m, 'w')
+    file.write( $json_1m )
+  rescue IOError => e
+    # TODO: do something.
+  ensure
+    file.close unless file.nil?
+  end
+  
+  # Write 5m file 
+  begin 
+    $out_file_5m = "output/ec2-#{awsregion}-basic.json"
+    file = File.open($out_file_5m, 'w')
+    file.write( $json_5m )
+  rescue IOError => e
+    # TODO: do something.
+  ensure
+    file.close unless file.nil?
+  end
 end
 
 awsregions.each do |awsregion|
