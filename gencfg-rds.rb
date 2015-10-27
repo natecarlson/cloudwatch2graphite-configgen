@@ -4,6 +4,10 @@ require 'aws-sdk-core'
 require 'aws-sdk-resources'
 require 'json'
 require 'jason'
+require 'fileutils'
+
+# First off, create an output directory if it doesn't already exist..
+FileUtils::mkdir 'output' unless File.directory?('output')
 
 # Load credentials from a credential-specific config file
 $creds = JSON.load(File.read('creds.json'))
@@ -52,7 +56,7 @@ def generateRDSConfig(awsregion)
 	  end
   end
 
-  puts Jason.render(<<-EOS
+  $json_out = Jason.render(<<-EOS
 {
   "awsCredentials": {
     "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
@@ -85,6 +89,17 @@ def generateRDSConfig(awsregion)
 }
 EOS
   )
+
+  begin 
+    $out_file = "output/rds-#{awsregion}.json"
+    file = File.open($out_file, 'w')
+    file.write( $json_out )
+  rescue IOError => e
+    # TODO: do something.
+  ensure
+    file.close unless file.nil?
+  end
+
 end
 
 awsregions.each do |awsregion|
