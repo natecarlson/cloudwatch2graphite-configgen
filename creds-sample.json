@@ -1,0 +1,7 @@
+{
+  "awsCredentials": {
+    "accessKeyId": "REPLACE",
+    "secretAccessKey": "REPLACE",
+    "accountNumber": "REPLACE"
+  } 
+} 
