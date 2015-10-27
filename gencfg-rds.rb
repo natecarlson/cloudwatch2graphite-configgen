@@ -45,10 +45,7 @@ rds.describe_db_instances.each do |instances|
 		end
 
 		if rdsinstance["tags"]["env"] == "prod" then
-			puts "#@instancename is env=prod, pushing.."
 			rdsinstances.push(rdsinstance)
-		else
-			puts "#@instancename ISN'T env=prod, punting."
 		end
 	end
 end
