@@ -1,5 +1,6 @@
 ### Project-specific ignores
 creds.json
+/output/
 
 ### Standard Ruby ignores
 *.gem
