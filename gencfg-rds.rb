@@ -19,6 +19,7 @@ config = JSON.load(File.read('config.json'))
 
 awsregions = config['regions']
 $outputmetrics = config['outputmetrics']['RDS']
+$skipinstances = config['skipinstances']['RDS']
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
@@ -56,20 +57,30 @@ def generateRDSConfig(awsregion)
 	  end
   end
 
-  $json_out = Jason.render(<<-EOS
+  # Prep our JSON output.. this will get passed through Jason later to properly comma-ize/etc.
+  $json_in = <<-EOS
 {
   "awsCredentials": {
-    "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
-    "secretAccessKey": <%= $creds['awsCredentials']['secretAccessKey'] %>,
-    "region": <%= @awsregion %>,
+    "accessKeyId": "#{$creds['awsCredentials']['accessKeyId']}",
+    "secretAccessKey": "#{$creds['awsCredentials']['secretAccessKey']}",
+    "region": "#@awsregion",
   },  
   "metricsConfig": {
     "metrics": [
-<% @rdsinstances.each do |instance| -%>
-  <% $outputmetrics.each do |metricname| -%>
+EOS
+
+  @rdsinstances.each do |instance|
+    if $skipinstances.include? "#{instance['name']}"
+      puts "Skipping config for: #{instance['name']} (on skipinstances list)"
+      next
+    else
+      puts "Generating config for: #{instance['name']}"
+    end
+    $outputmetrics.each do |metricname|
+      $json_in += <<-EOS
       {
         "Namespace": "AWS/RDS",
-        "MetricName": <%= metricname %>,
+        "MetricName": "#{metricname}",
         "Period": 60,
         "Statistics": [
           "Average"
@@ -77,18 +88,21 @@ def generateRDSConfig(awsregion)
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": <%= instance["name"] %>,
+            "Value": "#{instance['name']}",
           }
         ]
       },
-  <% end -%>
-<% end -%>
+EOS
+    end
+  end
+
+  $json_in += <<-EOS
     ],
     "carbonNameSpacePrefix": "cloudwatch"
   }
 }
 EOS
-  )
+  $json_out = Jason.render( $json_in )
 
   begin 
     $out_file = "output/rds-#{awsregion}.json"
