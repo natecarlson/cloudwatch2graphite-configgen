@@ -33,6 +33,7 @@ def generateRDSConfig(awsregion)
 	  region: "#{awsregion}",
   })
 
+  puts "Starting configs for service RDS, region #{awsregion}"
   rds = Aws::RDS::Client.new(region: awsregion)
   rds.describe_db_instances.each do |instances|
 	  instances.db_instances.each do |instance|

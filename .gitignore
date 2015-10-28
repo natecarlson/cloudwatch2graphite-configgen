@@ -1,5 +1,6 @@
 ### Project-specific ignores
 creds.json
+config.json
 /output/
 
 ### Standard Ruby ignores

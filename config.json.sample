@@ -4,8 +4,14 @@
     "ap-southeast-1"
   ],
   "services": [
-    "RDS"
+    "RDS",
+    "EC2"
   ],
+  "skipinstances": {
+    "RDS": [
+      "rds-instance-name-to-skip"
+    ]
+  },
   "outputmetrics": {
     "RDS": [
       "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"
