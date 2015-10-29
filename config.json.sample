@@ -12,6 +12,14 @@
       "rds-instance-name-to-skip"
     ]
   },
+  "matchtags": {
+    "RDS": {
+    },
+    "EC2": [
+      { "tagname": "tagvalue" },
+      { "tagname": "anothervalue", "differenttag": "foobar" }
+    ]
+  },
   "outputmetrics": {
     "RDS": [
       "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"

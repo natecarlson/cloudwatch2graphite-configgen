@@ -19,14 +19,17 @@ config = JSON.load(File.read('config.json'))
 
 awsregions = config['regions']
 $outputmetrics = config['outputmetrics']['EC2']
+$skipinstances = config['skipinstances']['RDS']
+$matchtags = config['matchtags']['EC2']
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
 
 # Output config file for EC2 for a given region
 def generateEC2Config(awsregion)
-  @awsregion = awsregion
-  @ec2instances = Array.new
+  ec2instances = Hash.new
+  ec2instances["stdmonitor"] = Array.new
+  ec2instances["detmonitor"] = Array.new
 
   Aws.config.update({
 	  region: "#{awsregion}",
@@ -34,7 +37,9 @@ def generateEC2Config(awsregion)
 
   ec2 = Aws::EC2::Client.new(region: awsregion)
 
-  ec2.describe_instances({ filters: [ { name: "tag:env", values: ["prod"] }, { name: "instance-state-name", values: ["running"] } ] } ).each do |reservations|
+  # Only filters specified here should be to get rid of cruft we don't want to see at all (non-running-machines/etc) - instances
+  # to include get parsed below using tags specified in the config file.
+  ec2.describe_instances({ filters: [ { name: "instance-state-name", values: ["running"] } ] } ).each do |reservations|
     reservations.reservations.each do |reservation|
       reservation.instances.each do |instance|
         @instanceid = instance.instance_id
@@ -46,29 +51,51 @@ def generateEC2Config(awsregion)
           ec2instance["tags"]["#{tag.key}"]  = "#{tag.value}"
         end
         ec2instance["name"] = "#{ec2instance['tags']['Name']}"
-        @ec2instances.push(ec2instance)
+
+        if ["enabled","pending"].include? ec2instance["detailedmonitoring"]
+          ec2instances["detmonitor"].push(ec2instance)
+        elsif ["disabled","disabling"].include? ec2instance["detailedmonitoring"]
+          ec2instances["stdmonitor"].push(ec2instance)
+        else
+          abort("Instance #{ec2instance['tags']['Name']} (id #{ec2instance["id"]}) has an invalid field for detailed monitoring: #{ec2instance["detailedmonitoring"]}")
+        end
       end
     end
   end
 
-  # TODO - clean this crap up, I don't like how I'm doing this at all. Should only have one routine to build the JSON and have sparate calls for basic vs detailed monitoring..
+  # Build JSON for 1 minute and 5 minute intervals
+  buildjson(awsregion,ec2instances["stdmonitor"],"basic")
+  buildjson(awsregion,ec2instances["detmonitor"],"detailed")
+
+end
+
+def buildjson(awsregion,ec2instances,monitoring)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
-  $json_1m = Jason.render(<<-EOS
+  $json_in = <<-EOS
 {
   "awsCredentials": {
-    "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
-    "secretAccessKey": <%= $creds['awsCredentials']['secretAccessKey'] %>,
-    "region": <%= @awsregion %>,
+    "accessKeyId": "#{$creds['awsCredentials']['accessKeyId']}",
+    "secretAccessKey": "#{$creds['awsCredentials']['secretAccessKey']}",
+    "region": "#{awsregion}",
   },  
   "metricsConfig": {
     "metrics": [
-<% @ec2instances.each do |instance| -%>
-<% next if ["disabled","disabling"].include? instance["detailedmonitoring"] -%>
-  <% $outputmetrics.each do |metricname| -%>
+EOS
+
+  ec2instances.each do |instance|
+    # TODO: Support checking against either the name or ID here
+    if $skipinstances.include? "#{instance['name']}"
+      puts "Skipping config for: #{instance['name']} (on skipinstances list)"
+      next
+    else
+      puts "Generating config for: #{instance['name']}"
+    end
+    $outputmetrics.each do |metricname|
+    $json_in += <<-EOS
       {
-        "OutputAlias": <%= instance["name"] %>,
+        "OutputAlias": "#{instance["name"]}",
         "Namespace": "AWS/EC2",
-        "MetricName": <%= metricname %>,
+        "MetricName": "#{metricname}",
         "Period": 60,
         "Statistics": [
           "Average"
@@ -76,70 +103,28 @@ def generateEC2Config(awsregion)
         "Dimensions": [
           {
             "Name": "InstanceId",
-            "Value": <%= instance["id"] %>,
+            "Value": "#{instance["id"]}",
           }
         ]
       },
-  <% end -%>
-<% end -%>
-    ],
-    "carbonNameSpacePrefix": "cloudwatch"
-  }
-}
 EOS
-  )
-  $json_5m = Jason.render(<<-EOS
-{
-  "awsCredentials": {
-    "accessKeyId": <%= $creds['awsCredentials']['accessKeyId'] %>,
-    "secretAccessKey": <%= $creds['awsCredentials']['secretAccessKey'] %>,
-    "region": <%= @awsregion %>,
-  },  
-  "metricsConfig": {
-    "metrics": [
-<% @ec2instances.each do |instance| -%>
-<% next if ["enabled","pending"].include? instance["detailedmonitoring"] -%>
-  <% $outputmetrics.each do |metricname| -%>
-      {
-        "OutputAlias": <%= instance["name"] %>,
-        "Namespace": "AWS/EC2",
-        "MetricName": <%= metricname %>,
-        "Period": 300,
-        "Statistics": [
-          "Average"
-        ],
-        "Dimensions": [
-          {
-            "Name": "InstanceId",
-            "Value": <%= instance["id"] %>,
-          }
-        ]
-      },
-  <% end -%>
-<% end -%>
-    ],
-    "carbonNameSpacePrefix": "cloudwatch"
-  }
-}
-EOS
-  )
 
-  # Write 1m file 
-  begin 
-    $out_file_1m = "output/ec2-#{awsregion}-detailed.json"
-    file = File.open($out_file_1m, 'w')
-    file.write( $json_1m )
-  rescue IOError => e
-    # TODO: do something.
-  ensure
-    file.close unless file.nil?
+    end
   end
+  $json_in += <<-EOS
+    ],
+    "carbonNameSpacePrefix": "cloudwatch"
+  }
+}
+EOS
+
+  $json_out = Jason.render ( $json_in )
   
-  # Write 5m file 
+  #$out_file_5m = "output/ec2-#{awsregion}-basic.json"
   begin 
-    $out_file_5m = "output/ec2-#{awsregion}-basic.json"
-    file = File.open($out_file_5m, 'w')
-    file.write( $json_5m )
+    $out_file = "output/ec2-#{awsregion}-#{monitoring}.json"
+    file = File.open($out_file, 'w')
+    file.write( $json_out )
   rescue IOError => e
     # TODO: do something.
   ensure
@@ -150,4 +135,3 @@ end
 awsregions.each do |awsregion|
   generateEC2Config(awsregion)
 end
-

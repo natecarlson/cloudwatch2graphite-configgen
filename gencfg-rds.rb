@@ -20,6 +20,7 @@ config = JSON.load(File.read('config.json'))
 awsregions = config['regions']
 $outputmetrics = config['outputmetrics']['RDS']
 $skipinstances = config['skipinstances']['RDS']
+$matchtags = config['matchtags']['EC2']
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
