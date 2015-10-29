@@ -10,11 +10,14 @@
   "skipinstances": {
     "RDS": [
       "rds-instance-name-to-skip"
+    ],
+    "EC2": [
+      "ec2-instance-name-to-skip"
     ]
   },
   "matchtags": {
-    "RDS": {
-    },
+    "RDS": [
+    ],
     "EC2": [
       { "tagname": "tagvalue" },
       { "tagname": "anothervalue", "differenttag": "foobar" }
