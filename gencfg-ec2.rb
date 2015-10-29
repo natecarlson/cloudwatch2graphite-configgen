@@ -107,10 +107,7 @@ EOS
       includeinstance=false
 
       $matchtags.each do |matchtag|
-        if instance["tags"].contain?( matchtag )
-          includeinstance=true
-          puts "Including instance #{instance["name"]}, as it matches our match list item #{matchtag}."
-        end
+        includeinstance=true if instance["tags"].contain?( matchtag )
       end
 
       if (includeinstance == false)
@@ -120,6 +117,7 @@ EOS
     end
     
     puts "Generating config for: #{instance['name']} (id #{instance['id']})"
+
     $outputmetrics.each do |metricname|
     $json_in += <<-EOS
       {
