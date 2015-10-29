@@ -6,6 +6,14 @@ require 'json'
 require 'jason'
 require 'fileutils'
 
+# Hack to see if a hash contains the values in another hash..
+# via http://grosser.it/2011/02/01/ruby-hashcontainother/
+class Hash
+  def contain?(other)
+    self.merge(other) == self
+  end
+end
+
 # First off, create an output directory if it doesn't already exist..
 FileUtils::mkdir 'output' unless File.directory?('output')
 
@@ -20,7 +28,7 @@ config = JSON.load(File.read('config.json'))
 awsregions = config['regions']
 $outputmetrics = config['outputmetrics']['RDS']
 $skipinstances = config['skipinstances']['RDS']
-$matchtags = config['matchtags']['EC2']
+$matchtags = config['matchtags']['RDS'] unless config['matchtags'].nil?
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
@@ -53,9 +61,7 @@ def generateRDSConfig(awsregion)
 		  	end
   		end
 
-	  	if rdsinstance["tags"]["env"] == "prod" then
-		  	@rdsinstances.push(rdsinstance)
-  		end
+      @rdsinstances.push(rdsinstance)
 	  end
   end
 
@@ -72,12 +78,31 @@ def generateRDSConfig(awsregion)
 EOS
 
   @rdsinstances.each do |instance|
+    # Check if this instance matches our 'skipinstances' list; if so, move on.
     if $skipinstances.include? "#{instance['name']}"
       puts "Skipping config for: #{instance['name']} (on skipinstances list)"
       next
-    else
-      puts "Generating config for: #{instance['name']}"
     end
+
+    # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
+    # otherwise skip it.
+    unless $matchtags.nil?
+      # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+      includeinstance=false
+
+      $matchtags.each do |matchtag|
+        includeinstance=true if instance["tags"].contain?( matchtag )
+      end
+
+      if (includeinstance == false)
+        puts "Skipping config for: #{instance['name']} (matchtags doesn't include a tag for it)"
+        next
+      end
+    end
+
+
+    puts "Generating config for: #{instance['name']}"
+
     $outputmetrics.each do |metricname|
       $json_in += <<-EOS
       {

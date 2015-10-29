@@ -6,6 +6,14 @@ require 'json'
 require 'jason'
 require 'fileutils'
 
+# Hack to see if a hash contains the values in another hash..
+# via http://grosser.it/2011/02/01/ruby-hashcontainother/
+class Hash
+  def contain?(other)
+    self.merge(other) == self
+  end
+end
+
 # First off, create an output directory if it doesn't already exist..
 FileUtils::mkdir 'output' unless File.directory?('output')
 
@@ -20,13 +28,15 @@ config = JSON.load(File.read('config.json'))
 awsregions = config['regions']
 $outputmetrics = config['outputmetrics']['EC2']
 $skipinstances = config['skipinstances']['RDS']
-$matchtags = config['matchtags']['EC2']
+$matchtags = config['matchtags']['EC2'] unless config['matchtags'].nil?
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
 
 # Output config file for EC2 for a given region
 def generateEC2Config(awsregion)
+
+  # Define two lists of nodes to generate config for - basic (standard) monitoring and detailed monitoring..
   ec2instances = Hash.new
   ec2instances["stdmonitor"] = Array.new
   ec2instances["detmonitor"] = Array.new
@@ -84,12 +94,32 @@ EOS
 
   ec2instances.each do |instance|
     # TODO: Support checking against either the name or ID here
+    # Check if this instance matches our 'skipinstances' list; if so, move on.
     if $skipinstances.include? "#{instance['name']}"
       puts "Skipping config for: #{instance['name']} (on skipinstances list)"
       next
-    else
-      puts "Generating config for: #{instance['name']}"
     end
+    
+    # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
+    # otherwise skip it.
+    unless $matchtags.nil?
+      # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+      includeinstance=false
+
+      $matchtags.each do |matchtag|
+        if instance["tags"].contain?( matchtag )
+          includeinstance=true
+          puts "Including instance #{instance["name"]}, as it matches our match list item #{matchtag}."
+        end
+      end
+
+      if (includeinstance == false)
+        puts "Skipping config for: #{instance['name']} (matchtags doesn't include a tag for it)"
+        next
+      end
+    end
+    
+    puts "Generating config for: #{instance['name']} (id #{instance['id']})"
     $outputmetrics.each do |metricname|
     $json_in += <<-EOS
       {
