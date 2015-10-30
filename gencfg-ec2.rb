@@ -26,8 +26,9 @@ $awsaccountnumber = $creds['awsCredentials']['accountNumber']
 config = JSON.load(File.read('config.json'))
 
 awsregions = config['regions']
-$outputmetrics = config['outputmetrics']['EC2']
-$skipinstances = config['skipinstances']['RDS']
+$outputmetrics = config['outputmetrics']
+$skipinstances = config['skipinstances']
+$dimensionname = config['dimensionname']
 $matchtags = config['matchtags']['EC2'] unless config['matchtags'].nil?
 
 # Use pretty JSON output format for readability..
@@ -38,8 +39,13 @@ def generateEC2Config(awsregion)
 
   # Define two lists of nodes to generate config for - basic (standard) monitoring and detailed monitoring..
   ec2instances = Hash.new
-  ec2instances["stdmonitor"] = Array.new
-  ec2instances["detmonitor"] = Array.new
+  ec2instances["detailed"] = Array.new
+  ec2instances["basic"] = Array.new
+
+  # ...and ditto for standard vs PIOPS EBS volumes
+  ebsvolumes = Hash.new
+  ebsvolumes["basic"] = Array.new
+  ebsvolumes["detailed"] = Array.new
 
   Aws.config.update({
 	  region: "#{awsregion}",
@@ -53,6 +59,8 @@ def generateEC2Config(awsregion)
     reservations.reservations.each do |reservation|
       reservation.instances.each do |instance|
         @instanceid = instance.instance_id
+
+        # Populate the ec2instance hash, which will contain all the info about the ec2 instance itself.
         ec2instance = Hash.new
         ec2instance['id'] = "#@instanceid"
         ec2instance['detailedmonitoring'] = instance.monitoring.state
@@ -62,24 +70,86 @@ def generateEC2Config(awsregion)
         end
         ec2instance["name"] = "#{ec2instance['tags']['Name']}"
 
+        # Determine if this instance will be included in our list to generate configs for..    
+    
+        # Check if this instance matches our 'skipinstances' list; if so, move on.
+        if $skipinstances["EC2"].include? "#{ec2instance['name']}"
+          puts "Skipping config for: #{ec2instance['name']} (on skipinstances list)"
+          next
+        end
+    
+        # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
+        # otherwise skip it.
+        unless $matchtags.nil?
+          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+          includeinstance=false
+
+          $matchtags.each do |matchtag|
+            includeinstance=true if ec2instance["tags"].contain?( matchtag )
+          end
+
+          if (includeinstance == false)
+            puts "Skipping config for: #{ec2instance['name']} (matchtags doesn't include a tag for it)"
+            next
+          end
+        end
+
         if ["enabled","pending"].include? ec2instance["detailedmonitoring"]
-          ec2instances["detmonitor"].push(ec2instance)
+          ec2instances["basic"].push(ec2instance)
         elsif ["disabled","disabling"].include? ec2instance["detailedmonitoring"]
-          ec2instances["stdmonitor"].push(ec2instance)
+          ec2instances["detailed"].push(ec2instance)
         else
           abort("Instance #{ec2instance['tags']['Name']} (id #{ec2instance["id"]}) has an invalid field for detailed monitoring: #{ec2instance["detailedmonitoring"]}")
+        end
+
+        # Populate our EBS volumes into the 'EBS' hash.. include our instance
+        # TODO: do one lookup for all volumes somehow.. this is slow!
+        ebsvolume = Hash.new
+        instance.block_device_mappings.each do |block_dev|
+          next if block_dev.ebs.status != "attached"
+          ebsvolume['id'] = block_dev.ebs.volume_id
+          ebsvolume['ec2_id'] = "#@instanceid"
+
+          # maybe these should be ec2_name and ec2_blockdev.. but this is probably what we'll refer to it as?
+          ebsvolume['name'] = ec2instance['tags']['Name']
+          ebsvolume['blockdev'] = block_dev.device_name
+
+          ec2.describe_volumes({ volume_ids: ["#{block_dev.ebs.volume_id}"] }).each do |volumes|
+            volumes.volumes.each do |volume| # There should only be one..
+              ebsvolume['type'] = volume.volume_type
+              ebsvolume['iops'] = volume.iops
+              ebsvolume['size'] = volume.size
+              ebsvolume["tags"] = Hash.new
+              volume.tags.each do |tag|
+                ebsvolume["tags"]["#{tag.key}"]  = "#{tag.value}"
+              end
+            end
+          end 
+        end
+        
+        # Logic for which EBS pool to push this into should go here.. 
+        if ["io1"].include? ebsvolume["type"]
+          ebsvolumes["detailed"].push(ebsvolume)
+        elsif ["standard","gp2"].include? ebsvolume["type"]
+          ebsvolumes["basic"].push(ebsvolume)
+        else
+          abort("Volume #{ebsvolume['tags']['Name']} (id #{ebsvolume["id"]}) has an invalid field for type: #{ebsvolume["type"]}")
         end
       end
     end
   end
 
   # Build JSON for 1 minute and 5 minute intervals
-  buildjson(awsregion,ec2instances["stdmonitor"],"basic")
-  buildjson(awsregion,ec2instances["detmonitor"],"detailed")
+  buildjson(awsregion,ec2instances["basic"],"EC2","detailed",60)
+  buildjson(awsregion,ec2instances["detailed"],"EC2","basic",300)
+
+  # Build JSON for Standard and PIOPS EBS disk (5m and 1m intervals)
+  buildjson(awsregion,ebsvolumes["basic"],"EBS","basic",300)
+  buildjson(awsregion,ebsvolumes["detailed"],"EBS","detailed",60)
 
 end
 
-def buildjson(awsregion,ec2instances,monitoring)
+def buildjson(awsregion,instances,awsnamespace,monitoring,period)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
   $json_in = <<-EOS
 {
@@ -92,45 +162,30 @@ def buildjson(awsregion,ec2instances,monitoring)
     "metrics": [
 EOS
 
-  ec2instances.each do |instance|
-    # TODO: Support checking against either the name or ID here
-    # Check if this instance matches our 'skipinstances' list; if so, move on.
-    if $skipinstances.include? "#{instance['name']}"
-      puts "Skipping config for: #{instance['name']} (on skipinstances list)"
-      next
-    end
-    
-    # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
-    # otherwise skip it.
-    unless $matchtags.nil?
-      # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
-      includeinstance=false
-
-      $matchtags.each do |matchtag|
-        includeinstance=true if instance["tags"].contain?( matchtag )
-      end
-
-      if (includeinstance == false)
-        puts "Skipping config for: #{instance['name']} (matchtags doesn't include a tag for it)"
-        next
-      end
-    end
-    
+  instances.each do |instance|
     puts "Generating config for: #{instance['name']} (id #{instance['id']})"
 
-    $outputmetrics.each do |metricname|
+    if awsnamespace == "EBS"
+      outputalias = "#{monitoring}.#{instance["name"]}.#{instance["blockdev"].gsub('/dev/','')}"
+    else
+      outputalias = "#{monitoring}.#{instance["name"]}"
+    end
+
+    dimensionname = $dimensionname["#{awsnamespace}"]
+
+    $outputmetrics["#{awsnamespace}"].each do |metricname|
     $json_in += <<-EOS
       {
-        "OutputAlias": "#{instance["name"]}",
-        "Namespace": "AWS/EC2",
+        "OutputAlias": "#{outputalias}",
+        "Namespace": "AWS/#{awsnamespace}",
         "MetricName": "#{metricname}",
-        "Period": 60,
+        "Period": #{period},
         "Statistics": [
           "Average"
         ],
         "Dimensions": [
           {
-            "Name": "InstanceId",
+            "Name": "#{dimensionname}",
             "Value": "#{instance["id"]}",
           }
         ]
@@ -148,9 +203,8 @@ EOS
 
   $json_out = Jason.render ( $json_in )
   
-  #$out_file_5m = "output/ec2-#{awsregion}-basic.json"
   begin 
-    $out_file = "output/ec2-#{awsregion}-#{monitoring}.json"
+    $out_file = "output/#{awsnamespace.downcase}-#{awsregion}-#{monitoring}.json"
     file = File.open($out_file, 'w')
     file.write( $json_out )
   rescue IOError => e
