@@ -37,7 +37,7 @@
       "CPUUtilization": "Average", "DiskWriteBytes": "Average", "DiskReadBytes": "Average", "DiskWriteOps": "Average", "DiskReadOps": "Average", "NetworkIn": "Average", "NetworkOut": "Average"
     },
     "EBS": {
-      "VolumeReadBytes": "Average", "VolumeWriteBytes": "Average", "VolumeReadOps": "Average", "VolumeWriteOps": "Average", "VolumeTotalReadTime": "Average", "VolumeTotalWriteTime": "Average", "VolumeIdleTime": "Average", "VolumeQueueLength": "Average"
+      "VolumeReadBytes": "Sum", "VolumeWriteBytes": "Sum", "VolumeReadOps": "Sum", "VolumeWriteOps": "Sum", "VolumeTotalReadTime": "Sum", "VolumeTotalWriteTime": "Sum", "VolumeIdleTime": "Sum", "VolumeQueueLength": "Average"
     },
     "ELB": {
       "Latency": "Average", "RequestCount": "Sum", "SurgeQueueLength": "Maximum", "SpilloverCount": "Sum", "BackendConnectionErrors": "Sum", "HealthyHostCount": "Average", "HTTPCode_ELB_5XX": "Sum"
