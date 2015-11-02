@@ -26,7 +26,8 @@
   "dimensionname": {
     "RDS": "DBInstanceIdentifier",
     "EC2": "InstanceId",
-    "EBS": "VolumeId"
+    "EBS": "VolumeId",
+    "ELB": "LoadBalancerName"
   },
   "outputmetrics": {
     "RDS": {
@@ -37,5 +38,9 @@
     },
     "EBS": {
       "VolumeReadBytes": "Average", "VolumeWriteBytes": "Average", "VolumeReadOps": "Average", "VolumeWriteOps": "Average", "VolumeTotalReadTime": "Average", "VolumeTotalWriteTime": "Average", "VolumeIdleTime": "Average", "VolumeQueueLength": "Average"
+    },
+    "ELB": {
+      "Latency": "Average", "RequestCount": "Sum", "SurgeQueueLength": "Maximum", "SpilloverCount": "Sum", "BackendConnectionErrors": "Sum", "HealthyHostCount": "Average", "HTTPCode_ELB_5XX": "Sum"
     }
+  }
 } 
