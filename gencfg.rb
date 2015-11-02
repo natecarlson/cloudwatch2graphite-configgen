@@ -77,7 +77,7 @@ $matchtags = config['matchtags'] unless config['matchtags'].nil?
 Jason.output_format = :pretty
 
 # Output config file for EC2 for a given region
-def generate_config_EC2(awsregion)
+def generate_config_EC2(awsregion,awsservice)
 
   # Define two lists of nodes to generate config for - basic (standard) monitoring and detailed monitoring..
   ec2instances = Hash.new
@@ -191,8 +191,8 @@ def generate_config_EC2(awsregion)
   end
 
   # Build JSON for 1 minute and 5 minute intervals
-  buildjson(awsregion,ec2instances["basic"],"EC2","basic",300)
-  buildjson(awsregion,ec2instances["detailed"],"EC2","detailed",60)
+  buildjson(awsregion,ec2instances["basic"],"#{awsservice}","basic",300)
+  buildjson(awsregion,ec2instances["detailed"],"#{awsservice}","detailed",60)
 
   if $awsservices.include? "EBS"
     # Build JSON for Standard and PIOPS EBS disk (5m and 1m intervals)
@@ -202,7 +202,7 @@ def generate_config_EC2(awsregion)
 end
 
 # Output config file for RDS for a given region
-def generate_config_RDS(awsregion)
+def generate_config_RDS(awsregion,awsservice)
   rdsinstances = Array.new
 
   Aws.config.update({
@@ -262,18 +262,18 @@ def generate_config_RDS(awsregion)
 	  end
   end
   
-  buildjson(awsregion,rdsinstances,"RDS","detailed",60)
+  buildjson(awsregion,rdsinstances,"#{awsservice}","detailed",60)
 end
 
 # Output config file for ELB for a given region
-def generate_config_ELB(awsregion)
+def generate_config_ELB(awsregion,awsservice)
   elbinstances = Array.new
 
   Aws.config.update({
 	  region: "#{awsregion}",
   })
 
-  $log.info("Starting configs for service ELB, region #{awsregion}")
+  $log.info("Starting configs for service #{awsservice}, region #{awsregion}")
   elb = Aws::ElasticLoadBalancing::Client.new(region: awsregion)
   elb.describe_load_balancers.each do |instances|
 	  instances.load_balancer_descriptions.each do |instance|
@@ -320,10 +320,10 @@ def generate_config_ELB(awsregion)
 	  end
   end
   
-  buildjson(awsregion,elbinstances,"ELB","detailed",60)
+  buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60)
 end
 
-def buildjson(awsregion,instances,awsnamespace,monitoring,period)
+def buildjson(awsregion,instances,awsservice,monitoring,period)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
   $json_in = <<-EOS
 {
@@ -339,19 +339,19 @@ EOS
   instances.each do |instance|
     $log.info("Generating config for: #{instance['name']} (id #{instance['id']})")
 
-    if awsnamespace == "EBS"
+    if awsservice.downcase == "ebs"
       outputalias = "#{monitoring}.#{instance["name"]}.#{instance["blockdev"].gsub('/dev/','')}"
     else
       outputalias = "#{monitoring}.#{instance["name"]}"
     end
 
-    dimensionname = $dimensionname["#{awsnamespace}"]
+    dimensionname = $dimensionname["#{awsservice}"]
 
-    $outputmetrics["#{awsnamespace}"].each do |metricname, stattype|
+    $outputmetrics["#{awsservice}"].each do |metricname, stattype|
     $json_in += <<-EOS
       {
         "OutputAlias": "#{outputalias}",
-        "Namespace": "AWS/#{awsnamespace}",
+        "Namespace": "AWS/#{awsservice.upcase}",
         "MetricName": "#{metricname}",
         "Period": #{period},
         "Statistics": [
@@ -378,7 +378,7 @@ EOS
   $json_out = Jason.render ( $json_in )
   
   begin 
-    $out_file = "output/#{awsnamespace.downcase}-#{awsregion}-#{monitoring}.json"
+    $out_file = "output/#{awsservice.downcase}-#{awsregion}-#{monitoring}.json"
     file = File.open($out_file, 'w')
     file.write( $json_out )
   rescue IOError => e
@@ -397,11 +397,11 @@ awsregions.each do |awsregion|
 
     $log.info("--- Generating config for AWS Region: #{awsregion}; service #{awsservice} ---")
     if (awsservice.downcase == "ec2")
-      generate_config_EC2(awsregion)
+      generate_config_EC2(awsregion,awsservice)
     elsif (awsservice.downcase == "rds")
-      generate_config_RDS(awsregion)
+      generate_config_RDS(awsregion,awsservice)
     elsif (awsservice.downcase == "elb")
-      generate_config_ELB(awsregion)
+      generate_config_ELB(awsregion,awsservice)
     else
       $log.error("This script cannot generate configuration for #{awsservice}; sorry!")
       abort
