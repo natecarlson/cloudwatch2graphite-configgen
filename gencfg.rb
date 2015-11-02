@@ -93,24 +93,31 @@ def generate_config_EC2(awsregion)
         # Determine if this instance will be included in our list to generate configs for..    
     
         # Check if this instance matches our 'skipinstances' list; if so, move on.
-        if $skipinstances["EC2"].include? "#{ec2instance['name']}"
-          puts "Skipping config for: #{ec2instance['name']} (on skipinstances list)"
-          next
+        unless $skipinstances.nil?
+          unless $skipinstances['EC2'].nil?
+            if $skipinstances["EC2"].include? "#{ec2instance['name']}"
+              puts "Skipping config for: #{ec2instance['name']} (on skipinstances list)"
+              next
+            end
+          end
         end
     
         # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
         # otherwise skip it.
-        unless $matchtags['EC2'].nil?
-          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
-          includeinstance=false
+        # TODO: What's the right way to figure out if both a parent and child are null?
+        unless $matchtags.nil?
+          unless $matchtags['EC2'].nil?
+            # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+            includeinstance=false
+  
+            $matchtags['EC2'].each do |matchtag|
+              includeinstance=true if ec2instance["tags"].contain?( matchtag )
+            end
 
-          $matchtags['EC2'].each do |matchtag|
-            includeinstance=true if ec2instance["tags"].contain?( matchtag )
-          end
-
-          if (includeinstance == false)
-            puts "Skipping config for: #{ec2instance['name']} (matchtags doesn't include a tag for it)"
-            next
+            if (includeinstance == false)
+              puts "Skipping config for: #{ec2instance['name']} (matchtags doesn't include a tag for it)"
+              next
+            end
           end
         end
 
@@ -181,9 +188,13 @@ def generate_config_RDS(awsregion)
   rds = Aws::RDS::Client.new(region: awsregion)
   rds.describe_db_instances.each do |instances|
 	  instances.db_instances.each do |instance|
-      if $skipinstances.include? "#{instance.db_instance_identifier}"
-        puts "Skipping config for: #{instance.db_instance_identifier} (on skipinstances list)"
-        next
+      unless $skipinstances.nil?
+        unless $skipinstances['RDS'].nil?
+          if $skipinstances['RDS'].include? "#{instance.db_instance_identifier}"
+            puts "Skipping config for: #{instance.db_instance_identifier} (on skipinstances list)"
+            next
+          end
+        end
       end
 
 		  instancename = instance.db_instance_identifier
@@ -205,17 +216,20 @@ def generate_config_RDS(awsregion)
 		  	end
   		end
 
-      unless $matchtags['RDS'].nil?
-        # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
-        includeinstance=false
+      # TODO: What's the right way to figure out if both a parent and child are null?
+      unless $matchtags.nil?
+        unless $matchtags['RDS'].nil?
+          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+          includeinstance=false
 
-        $matchtags['RDS'].each do |matchtag|
-          includeinstance=true if rdsinstance["tags"].contain?( matchtag )
-        end
+          $matchtags['RDS'].each do |matchtag|
+            includeinstance=true if rdsinstance["tags"].contain?( matchtag )
+          end
 
-        if (includeinstance == false)
-          puts "Skipping config for: #{rdsinstance['name']} (matchtags doesn't include a tag for it)"
-          next
+          if (includeinstance == false)
+            puts "Skipping config for: #{rdsinstance['name']} (matchtags doesn't include a tag for it)"
+            next
+          end
         end
       end
 
