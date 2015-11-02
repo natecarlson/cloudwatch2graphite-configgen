@@ -29,8 +29,8 @@ config = JSON.load(File.read('config.json'))
 if config['awsservices'].nil?
   abort("No 'awsservices' in the config file - we can't do that..")
 else
-  # Not a global - we'll cycle through these one at a time.
-  awsservices = config['awsservices']
+  # Even though we hit these one at a time, make it global, so we can enable/disable sub-services like EC2->EBS
+  $awsservices = config['awsservices']
 end
 if config['regions'].nil?
   abort("No 'regions' in the config file - we can't do that..")
@@ -170,10 +170,11 @@ def generate_config_EC2(awsregion)
   buildjson(awsregion,ec2instances["basic"],"EC2","basic",300)
   buildjson(awsregion,ec2instances["detailed"],"EC2","detailed",60)
 
-  # Build JSON for Standard and PIOPS EBS disk (5m and 1m intervals)
-  buildjson(awsregion,ebsvolumes["basic"],"EBS","basic",300)
-  buildjson(awsregion,ebsvolumes["detailed"],"EBS","detailed",60)
-
+  if $awsservices.include? "EBS"
+    # Build JSON for Standard and PIOPS EBS disk (5m and 1m intervals)
+    buildjson(awsregion,ebsvolumes["basic"],"EBS","basic",300)
+    buildjson(awsregion,ebsvolumes["detailed"],"EBS","detailed",60)
+  end
 end
 
 # Output config file for RDS for a given region
@@ -308,7 +309,7 @@ end
 awsregions.each do |awsregion|
   # Others..
   puts "--- Generating config for AWS Region: #{awsregion} ---"
-    awsservices.each do |awsservice|
+    $awsservices.each do |awsservice|
     # EBS is a special case; we do it as part of the EC2 generation.
     next if awsservice.downcase == "ebs"
 
