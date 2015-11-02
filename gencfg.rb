@@ -5,6 +5,23 @@ require 'aws-sdk-resources'
 require 'json'
 require 'jason'
 require 'fileutils'
+require 'logger'
+
+# Use Logger to let us set a debug level and filter out stuff we don't want..
+$log = Logger.new(STDOUT)
+class CustomFormatter < Logger::Formatter
+  def call(severity, time, progname, msg)
+   # msg2str is the internal helper that handles different msgs correctly
+    "#{time} - #{msg2str(msg)}" + "\n"
+  end
+end
+$customformatter = CustomFormatter.new
+$log.progname = "cw2graphite-cfggen"
+$log.formatter = proc { |severity, datetime, progname, msg|
+  $customformatter.call(severity, datetime, progname, msg.dump)
+}
+# Use DEBUG to see messages about hosts that we've skipped
+$log.level = Logger::INFO
 
 # Hack to see if a hash contains the values in another hash..
 # via http://grosser.it/2011/02/01/ruby-hashcontainother/
@@ -96,7 +113,7 @@ def generate_config_EC2(awsregion)
         unless $skipinstances.nil?
           unless $skipinstances['EC2'].nil?
             if $skipinstances["EC2"].include? "#{ec2instance['name']}"
-              puts "Skipping config for: #{ec2instance['name']} (on skipinstances list)"
+              $log.debug("Skipping config for: #{ec2instance['name']} (on skipinstances list)")
               next
             end
           end
@@ -115,7 +132,7 @@ def generate_config_EC2(awsregion)
             end
 
             if (includeinstance == false)
-              puts "Skipping config for: #{ec2instance['name']} (matchtags doesn't include a tag for it)"
+              $log.debug("Skipping config for: #{ec2instance['name']} (matchtags doesn't include a tag for it)")
               next
             end
           end
@@ -185,14 +202,14 @@ def generate_config_RDS(awsregion)
 	  region: "#{awsregion}",
   })
 
-  puts "Starting configs for service RDS, region #{awsregion}"
+  $log.info("Starting configs for service RDS, region #{awsregion}")
   rds = Aws::RDS::Client.new(region: awsregion)
   rds.describe_db_instances.each do |instances|
 	  instances.db_instances.each do |instance|
       unless $skipinstances.nil?
         unless $skipinstances['RDS'].nil?
           if $skipinstances['RDS'].include? "#{instance.db_instance_identifier}"
-            puts "Skipping config for: #{instance.db_instance_identifier} (on skipinstances list)"
+            $log.debug("Skipping config for: #{instance.db_instance_identifier} (on skipinstances list)")
             next
           end
         end
@@ -228,7 +245,7 @@ def generate_config_RDS(awsregion)
           end
 
           if (includeinstance == false)
-            puts "Skipping config for: #{rdsinstance['name']} (matchtags doesn't include a tag for it)"
+            $log.debug("Skipping config for: #{rdsinstance['name']} (matchtags doesn't include a tag for it)")
             next
           end
         end
@@ -255,7 +272,7 @@ def buildjson(awsregion,instances,awsnamespace,monitoring,period)
 EOS
 
   instances.each do |instance|
-    puts "Generating config for: #{instance['name']} (id #{instance['id']})"
+    $log.info("Generating config for: #{instance['name']} (id #{instance['id']})")
 
     if awsnamespace == "EBS"
       outputalias = "#{monitoring}.#{instance["name"]}.#{instance["blockdev"].gsub('/dev/','')}"
@@ -308,12 +325,12 @@ end
 
 awsregions.each do |awsregion|
   # Others..
-  puts "--- Generating config for AWS Region: #{awsregion} ---"
+  $log.info("--- Generating config for AWS Region: #{awsregion} ---")
     $awsservices.each do |awsservice|
     # EBS is a special case; we do it as part of the EC2 generation.
     next if awsservice.downcase == "ebs"
 
-    puts "--- Generating config for AWS Region: #{awsregion}; service #{awsservice} ---"
+    $log.info("--- Generating config for AWS Region: #{awsregion}; service #{awsservice} ---")
     if (awsservice.downcase == "ec2")
       generate_config_EC2(awsregion)
     elsif (awsservice.downcase == "rds")
