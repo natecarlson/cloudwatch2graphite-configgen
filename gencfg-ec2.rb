@@ -26,10 +26,20 @@ $awsaccountnumber = $creds['awsCredentials']['accountNumber']
 config = JSON.load(File.read('config.json'))
 
 awsregions = config['regions']
-$outputmetrics = config['outputmetrics']
-$skipinstances = config['skipinstances']
-$dimensionname = config['dimensionname']
-$matchtags = config['matchtags']['EC2'] unless config['matchtags'].nil?
+
+# Pull in config, and go ahead and throw errors now if the config is invalid..
+if config['outputmetrics'].nil?
+  abort("No 'outputmetrics' in the config file - we can't do that..")
+else
+  $outputmetrics = config['outputmetrics']
+end
+if config['dimensionname'].nil?
+  abort("No 'dimensionname' in the config file - we can't do that..")
+else
+  $dimensionname = config['dimensionname']
+end
+$skipinstances = config['skipinstances'] unless config['skipinstances'].nil?
+$matchtags = config['matchtags'] unless config['matchtags'].nil?
 
 # Use pretty JSON output format for readability..
 Jason.output_format = :pretty
@@ -80,11 +90,11 @@ def generateEC2Config(awsregion)
     
         # If matchtags is defined, validated that this instance matches the tags we've defined - include it if so,
         # otherwise skip it.
-        unless $matchtags.nil?
+        unless $matchtags['EC2'].nil?
           # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
           includeinstance=false
 
-          $matchtags.each do |matchtag|
+          $matchtags['EC2'].each do |matchtag|
             includeinstance=true if ec2instance["tags"].contain?( matchtag )
           end
 
