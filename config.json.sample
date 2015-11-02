@@ -29,14 +29,13 @@
     "EBS": "VolumeId"
   },
   "outputmetrics": {
-    "RDS": [
-      "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"
-    ],
-    "EC2": [
-      "CPUUtilization", "DiskWriteBytes", "DiskReadBytes", "DiskWriteOps", "DiskReadOps", "NetworkIn", "NetworkOut"
-    ],
-    "EBS": [
-      "VolumeReadBytes", "VolumeWriteBytes", "VolumeReadOps", "VolumeWriteOps", "VolumeTotalReadTime", "VolumeTotalWriteTime", "VolumeIdleTime", "VolumeQueueLength"
-    ]
-  }
+    "RDS": {
+      "CPUUtilization": "Average", "DatabaseConnections": "Average", "DiskQueueDepth": "Average", "FreeableMemory": "Average", "FreeStorageSpace": "Average", "SwapUsage": "Average", "ReadIOPS": "Average", "WriteIOPS": "Average", "ReadLatency": "Average", "WriteLatency": "Average", "ReadThroughput": "Average", "WriteThroughput": "Average", "NetworkReceiveThroughput": "Average", "NetworkTransmitThroughput": "Average"
+    },
+    "EC2": {
+      "CPUUtilization": "Average", "DiskWriteBytes": "Average", "DiskReadBytes": "Average", "DiskWriteOps": "Average", "DiskReadOps": "Average", "NetworkIn": "Average", "NetworkOut": "Average"
+    },
+    "EBS": {
+      "VolumeReadBytes": "Average", "VolumeWriteBytes": "Average", "VolumeReadOps": "Average", "VolumeWriteOps": "Average", "VolumeTotalReadTime": "Average", "VolumeTotalWriteTime": "Average", "VolumeIdleTime": "Average", "VolumeQueueLength": "Average"
+    }
 } 

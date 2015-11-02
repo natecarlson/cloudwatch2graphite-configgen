@@ -282,7 +282,7 @@ EOS
 
     dimensionname = $dimensionname["#{awsnamespace}"]
 
-    $outputmetrics["#{awsnamespace}"].each do |metricname|
+    $outputmetrics["#{awsnamespace}"].each do |metricname, stattype|
     $json_in += <<-EOS
       {
         "OutputAlias": "#{outputalias}",
@@ -290,7 +290,7 @@ EOS
         "MetricName": "#{metricname}",
         "Period": #{period},
         "Statistics": [
-          "Average"
+          "#{stattype}"
         ],
         "Dimensions": [
           {
