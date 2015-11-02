@@ -3,7 +3,7 @@
     "us-east-1",
     "ap-southeast-1"
   ],
-  "services": [
+  "awsservices": [
     "RDS",
     "EC2"
   ],
@@ -23,12 +23,20 @@
       { "tagname": "anothervalue", "differenttag": "foobar" }
     ]
   },
+  "dimensionname": {
+    "RDS": "DBInstanceIdentifier",
+    "EC2": "InstanceId",
+    "EBS": "VolumeId"
+  },
   "outputmetrics": {
     "RDS": [
       "CPUUtilization", "DatabaseConnections", "DiskQueueDepth", "FreeableMemory", "FreeStorageSpace", "SwapUsage", "ReadIOPS", "WriteIOPS", "ReadLatency", "WriteLatency", "ReadThroughput", "WriteThroughput", "NetworkReceiveThroughput", "NetworkTransmitThroughput"
     ],
     "EC2": [
-      "DiskWriteBytes", "DiskReadBytes"
+      "CPUUtilization", "DiskWriteBytes", "DiskReadBytes", "DiskWriteOps", "DiskReadOps", "NetworkIn", "NetworkOut"
+    ],
+    "EBS": [
+      "VolumeReadBytes", "VolumeWriteBytes", "VolumeReadOps", "VolumeWriteOps", "VolumeTotalReadTime", "VolumeTotalWriteTime", "VolumeIdleTime", "VolumeQueueLength"
     ]
   }
 } 
