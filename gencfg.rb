@@ -22,6 +22,7 @@ $log.formatter = proc { |severity, datetime, progname, msg|
 }
 # Use DEBUG to see messages about hosts that we've skipped
 $log.level = Logger::INFO
+#$log.level = Logger::DEBUG
 
 # Hack to see if a hash contains the values in another hash..
 # via http://grosser.it/2011/02/01/ruby-hashcontainother/
@@ -44,24 +45,28 @@ config = JSON.load(File.read('config.json'))
 
 # Pull in config, and go ahead and throw errors now if the config is invalid..
 if config['awsservices'].nil?
-  abort("No 'awsservices' in the config file - we can't do that..")
+  $log.error("No 'awsservices' in the config file - we can't do that..")
+  abort
 else
   # Even though we hit these one at a time, make it global, so we can enable/disable sub-services like EC2->EBS
   $awsservices = config['awsservices']
 end
 if config['regions'].nil?
-  abort("No 'regions' in the config file - we can't do that..")
+  $log.error("No 'regions' in the config file - we can't do that..")
+  abort
 else
   # Not a global - we'll cycle through these one at a time.
   awsregions = config['regions']
 end
 if config['outputmetrics'].nil?
-  abort("No 'outputmetrics' in the config file - we can't do that..")
+  $log.error("No 'outputmetrics' in the config file - we can't do that..")
+  abort
 else
   $outputmetrics = config['outputmetrics']
 end
 if config['dimensionname'].nil?
-  abort("No 'dimensionname' in the config file - we can't do that..")
+  $log.error("No 'dimensionname' in the config file - we can't do that..")
+  abort
 else
   $dimensionname = config['dimensionname']
 end
@@ -143,7 +148,8 @@ def generate_config_EC2(awsregion)
         elsif ["disabled","disabling"].include? ec2instance["detailedmonitoring"]
           ec2instances["basic"].push(ec2instance)
         else
-          abort("Instance #{ec2instance['tags']['Name']} (id #{ec2instance["id"]}) has an invalid field for detailed monitoring: #{ec2instance["detailedmonitoring"]}")
+          $log.error("Instance #{ec2instance['tags']['Name']} (id #{ec2instance["id"]}) has an invalid field for detailed monitoring: #{ec2instance["detailedmonitoring"]}")
+          abort
         end
 
         # Populate our EBS volumes into the 'EBS' hash.. include our instance
@@ -177,7 +183,8 @@ def generate_config_EC2(awsregion)
         elsif ["standard","gp2"].include? ebsvolume["type"]
           ebsvolumes["basic"].push(ebsvolume)
         else
-          abort("Volume #{ebsvolume['tags']['Name']} (id #{ebsvolume["id"]}) has an invalid field for type: #{ebsvolume["type"]}")
+          $log.error("Volume #{ebsvolume['tags']['Name']} (id #{ebsvolume["id"]}) has an invalid field for type: #{ebsvolume["type"]}")
+          abort
         end
       end
     end
@@ -258,6 +265,64 @@ def generate_config_RDS(awsregion)
   buildjson(awsregion,rdsinstances,"RDS","detailed",60)
 end
 
+# Output config file for ELB for a given region
+def generate_config_ELB(awsregion)
+  elbinstances = Array.new
+
+  Aws.config.update({
+	  region: "#{awsregion}",
+  })
+
+  $log.info("Starting configs for service ELB, region #{awsregion}")
+  elb = Aws::ElasticLoadBalancing::Client.new(region: awsregion)
+  elb.describe_load_balancers.each do |instances|
+	  instances.load_balancer_descriptions.each do |instance|
+      unless $skipinstances.nil?
+        unless $skipinstances['ELB'].nil?
+          if $skipinstances['ELB'].include? "#{load_balancer_name}"
+            $log.debug("Skipping config for: #{load_balancer_name} (on skipinstances list)")
+            next
+          end
+        end
+      end
+
+		  instancename = instance.load_balancer_name
+
+      elbinstance = Hash.new
+      # ELB doesn't have a distinct ID separate from the name - so set both the same
+		  elbinstance['name'] = instancename
+		  elbinstance['id'] = instancename
+	  	elbinstance["tags"] = Hash.new
+		  elb.describe_tags({ load_balancer_names: [ "#{instancename}" ] }).tag_descriptions.each do |tags|
+        tags.tags.each do |tag|
+	  	    elbinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
+		  	end
+  		end
+
+      # TODO: What's the right way to figure out if both a parent and child are null?
+      unless $matchtags.nil?
+        unless $matchtags['ELB'].nil?
+          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+          includeinstance=false
+
+          $matchtags['ELB'].each do |matchtag|
+            includeinstance=true if elbinstance["tags"].contain?( matchtag )
+          end
+
+          if (includeinstance == false)
+            $log.debug("Skipping config for: #{elbinstance['name']} (matchtags doesn't include a tag for it)")
+            next
+          end
+        end
+      end
+
+      elbinstances.push(elbinstance)
+	  end
+  end
+  
+  buildjson(awsregion,elbinstances,"ELB","detailed",60)
+end
+
 def buildjson(awsregion,instances,awsnamespace,monitoring,period)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
   $json_in = <<-EOS
@@ -335,8 +400,11 @@ awsregions.each do |awsregion|
       generate_config_EC2(awsregion)
     elsif (awsservice.downcase == "rds")
       generate_config_RDS(awsregion)
+    elsif (awsservice.downcase == "elb")
+      generate_config_ELB(awsregion)
     else
-      abort("Uh, crap, we don't know how to generate the config for #{awsservice}...")
+      $log.error("This script cannot generate configuration for #{awsservice}; sorry!")
+      abort
     end
   end
 end
