@@ -154,9 +154,9 @@ def generate_config_EC2(awsregion,awsservice)
 
         # Populate our EBS volumes into the 'EBS' hash.. include our instance
         # TODO: do one lookup for all volumes somehow.. this is slow!
-        ebsvolume = Hash.new
         instance.block_device_mappings.each do |block_dev|
           next if block_dev.ebs.status != "attached"
+          ebsvolume = Hash.new
           ebsvolume['id'] = block_dev.ebs.volume_id
           ebsvolume['ec2_id'] = "#@instanceid"
 
