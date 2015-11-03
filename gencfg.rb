@@ -175,16 +175,16 @@ def generate_config_EC2(awsregion,awsservice)
               end
             end
           end 
-        end
         
-        # Logic for which EBS pool to push this into should go here.. 
-        if ["io1"].include? ebsvolume["type"]
-          ebsvolumes["detailed"].push(ebsvolume)
-        elsif ["standard","gp2"].include? ebsvolume["type"]
-          ebsvolumes["basic"].push(ebsvolume)
-        else
-          $log.error("Volume #{ebsvolume['tags']['Name']} (id #{ebsvolume["id"]}) has an invalid field for type: #{ebsvolume["type"]}")
-          abort
+          # Logic for which EBS pool to push this into should go here.. 
+          if ["io1"].include? ebsvolume["type"]
+            ebsvolumes["detailed"].push(ebsvolume)
+          elsif ["standard","gp2"].include? ebsvolume["type"]
+            ebsvolumes["basic"].push(ebsvolume)
+          else
+            $log.error("Volume #{ebsvolume['tags']['Name']} (id #{ebsvolume["id"]}) has an invalid field for type: #{ebsvolume["type"]}")
+            abort
+          end
         end
       end
     end
