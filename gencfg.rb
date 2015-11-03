@@ -209,7 +209,6 @@ def generate_config_RDS(awsregion,awsservice)
 	  region: "#{awsregion}",
   })
 
-  $log.info("Starting configs for service RDS, region #{awsregion}")
   rds = Aws::RDS::Client.new(region: awsregion)
   rds.describe_db_instances.each do |instances|
 	  instances.db_instances.each do |instance|
@@ -273,7 +272,6 @@ def generate_config_ELB(awsregion,awsservice)
 	  region: "#{awsregion}",
   })
 
-  $log.info("Starting configs for service #{awsservice}, region #{awsregion}")
   elb = Aws::ElasticLoadBalancing::Client.new(region: awsregion)
   elb.describe_load_balancers.each do |instances|
 	  instances.load_balancer_descriptions.each do |instance|
@@ -337,7 +335,7 @@ def buildjson(awsregion,instances,awsservice,monitoring,period)
 EOS
 
   instances.each do |instance|
-    $log.info("Generating config for: #{instance['name']} (id #{instance['id']})")
+    $log.info("Building JSON for: #{awsservice} - #{instance['name']} (id #{instance['id']})")
 
     if awsservice.downcase == "ebs"
       outputalias = "#{monitoring}.#{instance["name"]}.#{instance["blockdev"].gsub('/dev/','')}"
