@@ -338,9 +338,9 @@ EOS
     $log.info("Building JSON for: #{awsservice} - #{instance['name']} (id #{instance['id']})")
 
     if awsservice.downcase == "ebs"
-      outputalias = "#{monitoring}.#{instance["name"]}.#{instance["blockdev"].gsub('/dev/','')}"
+      outputalias = "#{monitoring}.#{instance["name"].downcase}.#{instance["blockdev"].gsub('/dev/','')}"
     else
-      outputalias = "#{monitoring}.#{instance["name"]}"
+      outputalias = "#{monitoring}.#{instance["name"].downcase}"
     end
 
     dimensionname = $dimensionname["#{awsservice}"]
@@ -358,7 +358,7 @@ EOS
         "Dimensions": [
           {
             "Name": "#{dimensionname}",
-            "Value": "#{instance["id"]}",
+            "Value": "#{instance["id"].downcase}",
           }
         ]
       },
