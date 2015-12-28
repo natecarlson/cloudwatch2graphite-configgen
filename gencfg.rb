@@ -358,7 +358,7 @@ EOS
         "Dimensions": [
           {
             "Name": "#{dimensionname}",
-            "Value": "#{instance["id"].downcase}",
+            "Value": "#{instance["id"]}",
           }
         ]
       },
