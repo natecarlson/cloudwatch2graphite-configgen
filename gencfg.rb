@@ -190,14 +190,17 @@ def generate_config_EC2(awsregion,awsservice)
     end
   end
 
+  dimensionname = $dimensionname["#{awsservice}"]
+
   # Build JSON for 1 minute and 5 minute intervals
-  buildjson(awsregion,ec2instances["basic"],"#{awsservice}","basic",300)
-  buildjson(awsregion,ec2instances["detailed"],"#{awsservice}","detailed",60)
+  buildjson(awsregion,ec2instances["basic"],"#{awsservice}","basic",300,"#{dimensionname}")
+  buildjson(awsregion,ec2instances["detailed"],"#{awsservice}","detailed",60,"#{dimensionname}")
 
   if $awsservices.include? "EBS"
+    dimensionnameebs = $dimensionname["EBS"]
     # Build JSON for Standard and PIOPS EBS disk (5m and 1m intervals)
-    buildjson(awsregion,ebsvolumes["basic"],"EBS","basic",300)
-    buildjson(awsregion,ebsvolumes["detailed"],"EBS","detailed",60)
+    buildjson(awsregion,ebsvolumes["basic"],"EBS","basic",300,"#{dimensionnameebs}")
+    buildjson(awsregion,ebsvolumes["detailed"],"EBS","detailed",60,"#{dimensionnameebs}")
   end
 end
 
@@ -261,7 +264,8 @@ def generate_config_RDS(awsregion,awsservice)
     end
   end
   
-  buildjson(awsregion,rdsinstances,"#{awsservice}","detailed",60)
+  dimensionname = $dimensionname["#{awsservice}"]
+  buildjson(awsregion,rdsinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
 end
 
 # Output config file for ELB for a given region
@@ -318,7 +322,8 @@ def generate_config_ELB(awsregion,awsservice)
     end
   end
   
-  buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60)
+  dimensionname = $dimensionname["#{awsservice}"]
+  buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
 end
 
 # Output config file for ApplicationELB (ALB/ELBv2) for a given region
@@ -378,7 +383,8 @@ def generate_config_ApplicationELB(awsregion,awsservice)
     end
   end
 
-  buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60)
+  dimensionname = $dimensionname["#{awsservice}"]
+  buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
 end
 
 # Output config file for DMS for a given region
@@ -413,10 +419,11 @@ def generate_config_DMS(awsregion,awsservice)
     #end
   end
   
-  buildjson(awsregion,dmsinstances,"#{awsservice}","detailed",60)
+  dimensionname = $dimensionname["#{awsservice}"]
+  buildjson(awsregion,dmsinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
 end
 
-def buildjson(awsregion,instances,awsservice,monitoring,period)
+def buildjson(awsregion,instances,awsservice,monitoring,period,dimensionname)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
   $json_in = <<-EOS
 {
@@ -445,8 +452,6 @@ EOS
     else
       outputawsservice = "ApplicationELB"
     end
-
-    dimensionname = $dimensionname["#{awsservice}"]
 
     $outputmetrics["#{awsservice}"].each do |metricname, stattype|
     $json_in += <<-EOS
