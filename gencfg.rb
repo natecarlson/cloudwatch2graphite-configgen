@@ -321,7 +321,8 @@ def generate_config_ELB(awsregion,awsservice)
   buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60)
 end
 
-# Output config file for ApplicationELB (ALB?) for a given region
+# Output config file for ApplicationELB (ALB/ELBv2) for a given region
+# TODO: Add additional logic to support parsing stats for each target under an ALB
 def generate_config_ApplicationELB(awsregion,awsservice)
   applicationelbinstances = Array.new
 
