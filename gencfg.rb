@@ -321,6 +321,41 @@ def generate_config_ELB(awsregion,awsservice)
   buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60)
 end
 
+# Output config file for DMS for a given region
+def generate_config_DMS(awsregion,awsservice)
+  dmsinstances = Array.new
+
+  Aws.config.update({
+	  region: "#{awsregion}",
+  })
+
+  dms = Aws::DatabaseMigrationService::Client.new(region: awsregion)
+  dms.describe_replication_instances.replication_instances.each do |instances|
+    #puts instances
+    #puts instances.replication_instance_identifier
+    #instances.each do |instance|
+      unless $skipinstances.nil?
+        unless $skipinstances['DMS'].nil?
+          if $skipinstances['DMS'].include? "#{instances.replication_instance_identifier}"
+            $log.debug("Skipping config for: #{instances.replication_instance_identifier} (on skipinstances list)")
+            next
+          end
+        end
+      end
+
+		  instancename = instances.replication_instance_identifier
+
+      dmsinstance = Hash.new
+      # DMS doesn't have a distinct ID separate from the name - so set both the same
+		  dmsinstance['name'] = instancename
+		  dmsinstance['id'] = instancename
+      dmsinstances.push(dmsinstance)
+	  #end
+  end
+  
+  buildjson(awsregion,dmsinstances,"#{awsservice}","detailed",60)
+end
+
 def buildjson(awsregion,instances,awsservice,monitoring,period)
   # TODO - figure out how to better namespace output to Carbon, so that we can have separate storage aggregations for 1m vs 5m
   $json_in = <<-EOS
@@ -400,6 +435,8 @@ awsregions.each do |awsregion|
       generate_config_RDS(awsregion,awsservice)
     elsif (awsservice.downcase == "elb")
       generate_config_ELB(awsregion,awsservice)
+    elsif (awsservice.downcase == "dms")
+      generate_config_DMS(awsregion,awsservice)
     else
       $log.error("This script cannot generate configuration for #{awsservice}; sorry!")
       abort

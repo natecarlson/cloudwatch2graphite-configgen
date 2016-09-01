@@ -27,7 +27,8 @@
     "RDS": "DBInstanceIdentifier",
     "EC2": "InstanceId",
     "EBS": "VolumeId",
-    "ELB": "LoadBalancerName"
+    "ELB": "LoadBalancerName",
+    "DMS": "ReplicationInstanceIdentifier"
   },
   "outputmetrics": {
     "RDS": {
@@ -41,6 +42,8 @@
     },
     "ELB": {
       "Latency": "Average", "RequestCount": "Sum", "SurgeQueueLength": "Maximum", "SpilloverCount": "Sum", "BackendConnectionErrors": "Sum", "HealthyHostCount": "Average", "HTTPCode_ELB_5XX": "Sum"
+    },
+    "DMS": { "CPUCreditBalance": "Average", "CPUCreditUsage": "Average", "CPUUtilization": "Average", "DiskQueueDepth": "Average", "FreeStorageSpace": "Average", "FreeableMemory": "Average", "ReadIOPS": "Average", "ReadLatency": "Average", "ReadThroughput": "Average", "SwapUsage": "Average", "WriteIOPS": "Average", "WriteLatency": "Average", "WriteThroughput": "Average"
     }
   }
 } 
