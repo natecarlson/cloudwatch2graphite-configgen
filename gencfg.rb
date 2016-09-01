@@ -398,6 +398,7 @@ def generate_config_ApplicationELB(awsregion,awsservice)
         end
 
         # Take the name tag, strip off the application elb name from the front, and use it as our name..
+        # TODO: Fallback to the actual 'name' parameter if this doesn't give us anything useful.
         instancenamestrippedalb = instancename.sub('alb','')
         applicationelbtargetgroupinstance['name'] = applicationelbtargetgroupinstance["tags"]["Name"].sub(instancenamestrippedalb,'')
 
