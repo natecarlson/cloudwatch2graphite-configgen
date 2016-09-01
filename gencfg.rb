@@ -90,7 +90,7 @@ def generate_config_EC2(awsregion,awsservice)
   ebsvolumes["detailed"] = Array.new
 
   Aws.config.update({
-	  region: "#{awsregion}",
+    region: "#{awsregion}",
   })
 
   ec2 = Aws::EC2::Client.new(region: awsregion)
@@ -206,12 +206,12 @@ def generate_config_RDS(awsregion,awsservice)
   rdsinstances = Array.new
 
   Aws.config.update({
-	  region: "#{awsregion}",
+    region: "#{awsregion}",
   })
 
   rds = Aws::RDS::Client.new(region: awsregion)
   rds.describe_db_instances.each do |instances|
-	  instances.db_instances.each do |instance|
+    instances.db_instances.each do |instance|
       unless $skipinstances.nil?
         unless $skipinstances['RDS'].nil?
           if $skipinstances['RDS'].include? "#{instance.db_instance_identifier}"
@@ -221,24 +221,24 @@ def generate_config_RDS(awsregion,awsservice)
         end
       end
 
-		  instancename = instance.db_instance_identifier
+      instancename = instance.db_instance_identifier
 
-  		# AWS's SDK is silly, and doesn't let you look up tags based on a RDS DB name. Have to
-	  	# pass in an 'ARN' instead - and the SDK doesn't provide the ARN to us. Have to generate it.
-		  # Really, really lame.
-  		instancearn = "arn:aws:rds:#{awsregion}:#$awsaccountnumber:db:#{instancename}"
-	  	
+      # AWS's SDK is silly, and doesn't let you look up tags based on a RDS DB name. Have to
+      # pass in an 'ARN' instead - and the SDK doesn't provide the ARN to us. Have to generate it.
+      # Really, really lame.
+      instancearn = "arn:aws:rds:#{awsregion}:#$awsaccountnumber:db:#{instancename}"
+
       rdsinstance = Hash.new
       # RDS doesn't have a distinct ID separate from the name - so set both the same
-		  rdsinstance['name'] = instancename
-		  rdsinstance['id'] = instancename
-  		rdsinstance['arn']  = instancearn
-	  	rdsinstance["tags"] = Hash.new
-		  rds.list_tags_for_resource({ resource_name: instancearn }).each do |tags|
-  			tags.tag_list.each do |tag|
-	  			rdsinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
-		  	end
-  		end
+      rdsinstance['name'] = instancename
+      rdsinstance['id'] = instancename
+      rdsinstance['arn']  = instancearn
+      rdsinstance["tags"] = Hash.new
+      rds.list_tags_for_resource({ resource_name: instancearn }).each do |tags|
+        tags.tag_list.each do |tag|
+          rdsinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
+        end
+      end
 
       # TODO: What's the right way to figure out if both a parent and child are null?
       unless $matchtags.nil?
@@ -258,7 +258,7 @@ def generate_config_RDS(awsregion,awsservice)
       end
 
       rdsinstances.push(rdsinstance)
-	  end
+    end
   end
   
   buildjson(awsregion,rdsinstances,"#{awsservice}","detailed",60)
@@ -269,12 +269,12 @@ def generate_config_ELB(awsregion,awsservice)
   elbinstances = Array.new
 
   Aws.config.update({
-	  region: "#{awsregion}",
+    region: "#{awsregion}",
   })
 
   elb = Aws::ElasticLoadBalancing::Client.new(region: awsregion)
   elb.describe_load_balancers.each do |instances|
-	  instances.load_balancer_descriptions.each do |instance|
+    instances.load_balancer_descriptions.each do |instance|
       unless $skipinstances.nil?
         unless $skipinstances['ELB'].nil?
           if $skipinstances['ELB'].include? "#{load_balancer_name}"
@@ -284,18 +284,18 @@ def generate_config_ELB(awsregion,awsservice)
         end
       end
 
-		  instancename = instance.load_balancer_name
+      instancename = instance.load_balancer_name
 
       elbinstance = Hash.new
       # ELB doesn't have a distinct ID separate from the name - so set both the same
-		  elbinstance['name'] = instancename
-		  elbinstance['id'] = instancename
-	  	elbinstance["tags"] = Hash.new
-		  elb.describe_tags({ load_balancer_names: [ "#{instancename}" ] }).tag_descriptions.each do |tags|
+      elbinstance['name'] = instancename
+      elbinstance['id'] = instancename
+      elbinstance["tags"] = Hash.new
+      elb.describe_tags({ load_balancer_names: [ "#{instancename}" ] }).tag_descriptions.each do |tags|
         tags.tags.each do |tag|
-	  	    elbinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
-		  	end
-  		end
+          elbinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
+        end
+      end
 
       # TODO: What's the right way to figure out if both a parent and child are null?
       unless $matchtags.nil?
@@ -315,10 +315,69 @@ def generate_config_ELB(awsregion,awsservice)
       end
 
       elbinstances.push(elbinstance)
-	  end
+    end
   end
   
   buildjson(awsregion,elbinstances,"#{awsservice}","detailed",60)
+end
+
+# Output config file for ApplicationELB (ALB?) for a given region
+def generate_config_ApplicationELB(awsregion,awsservice)
+  applicationelbinstances = Array.new
+
+  Aws.config.update({
+    region: "#{awsregion}",
+  })
+
+  applicationelb = Aws::ElasticLoadBalancingV2::Client.new(region: awsregion)
+  applicationelb.describe_load_balancers.each do |instances|
+    instances.load_balancers.each do |instance|
+      instancename = instance.load_balancer_name
+      instancearn = instance.load_balancer_arn
+
+      unless $skipinstances.nil?
+        unless $skipinstances['ApplicationELB'].nil?
+          if $skipinstances['ApplicationELB'].include? "#{instancename}"
+            $log.debug("Skipping config for: #{instancename} (on skipinstances list)")
+            next
+          end
+        end
+      end
+
+      applicationelbinstance = Hash.new
+      applicationelbinstance['name'] = instancename
+      # The ID is the last section of the ARN, with sections separated by colons.
+      # ..but there is also a stray 'loadbalancer/' in front of it. Sigh.
+      applicationelbinstance['id'] = instancearn.rpartition('loadbalancer/').last
+      applicationelbinstance["tags"] = Hash.new
+      applicationelb.describe_tags({ resource_arns: [ "#{instancearn}" ] }).tag_descriptions.each do |tags|
+        tags.tags.each do |tag|
+          applicationelbinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
+        end
+      end
+
+      # TODO: What's the right way to figure out if both a parent and child are null?
+      unless $matchtags.nil?
+        unless $matchtags['ApplicationELB'].nil?
+          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+          includeinstance=false
+
+          $matchtags['ApplicationELB'].each do |matchtag|
+            includeinstance=true if applicationelbinstance["tags"].contain?( matchtag )
+          end
+
+          if (includeinstance == false)
+            $log.debug("Skipping config for: #{applicationelbinstance['name']} (matchtags doesn't include a tag for it)")
+            next
+          end
+        end
+      end
+
+      applicationelbinstances.push(applicationelbinstance)
+    end
+  end
+
+  buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60)
 end
 
 # Output config file for DMS for a given region
@@ -326,7 +385,7 @@ def generate_config_DMS(awsregion,awsservice)
   dmsinstances = Array.new
 
   Aws.config.update({
-	  region: "#{awsregion}",
+    region: "#{awsregion}",
   })
 
   dms = Aws::DatabaseMigrationService::Client.new(region: awsregion)
@@ -343,14 +402,14 @@ def generate_config_DMS(awsregion,awsservice)
         end
       end
 
-		  instancename = instances.replication_instance_identifier
+      instancename = instances.replication_instance_identifier
 
       dmsinstance = Hash.new
       # DMS doesn't have a distinct ID separate from the name - so set both the same
-		  dmsinstance['name'] = instancename
-		  dmsinstance['id'] = instancename
+      dmsinstance['name'] = instancename
+      dmsinstance['id'] = instancename
       dmsinstances.push(dmsinstance)
-	  #end
+    #end
   end
   
   buildjson(awsregion,dmsinstances,"#{awsservice}","detailed",60)
@@ -378,13 +437,21 @@ EOS
       outputalias = "#{monitoring}.#{instance["name"].downcase}"
     end
 
+    # With ALB/ELBv2/ApplicationELB, AWS started breaking the rule of namespace being in all caps..
+    # So, do hacks to support that.
+    if awsservice.downcase != "applicationelb"
+      outputawsservice = awsservice.upcase
+    else
+      outputawsservice = "ApplicationELB"
+    end
+
     dimensionname = $dimensionname["#{awsservice}"]
 
     $outputmetrics["#{awsservice}"].each do |metricname, stattype|
     $json_in += <<-EOS
       {
         "OutputAlias": "#{outputalias}",
-        "Namespace": "AWS/#{awsservice.upcase}",
+        "Namespace": "AWS/#{outputawsservice}",
         "MetricName": "#{metricname}",
         "Period": #{period},
         "Statistics": [
@@ -435,6 +502,8 @@ awsregions.each do |awsregion|
       generate_config_RDS(awsregion,awsservice)
     elsif (awsservice.downcase == "elb")
       generate_config_ELB(awsregion,awsservice)
+    elsif (awsservice.downcase == "applicationelb")
+      generate_config_ApplicationELB(awsregion,awsservice)
     elsif (awsservice.downcase == "dms")
       generate_config_DMS(awsregion,awsservice)
     else

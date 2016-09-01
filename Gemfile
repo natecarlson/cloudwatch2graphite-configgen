@@ -1,3 +1,3 @@
 source "https://rubygems.org"
-gem 'aws-sdk', '~> 2.2.27'
+gem 'aws-sdk', '~> 2.3.10'
 gem 'jason'
