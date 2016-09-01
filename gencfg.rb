@@ -385,6 +385,8 @@ def generate_config_ApplicationELB(awsregion,awsservice)
         applicationelbtargetgroupinstance = Hash.new
         # Specify parent ELB, for use in the json building exercise
         applicationelbtargetgroupinstance['parent'] = instancename
+        # Ugh. Also need to include parent id, as have to do two dimensions..
+        applicationelbtargetgroupinstance['parentid'] = applicationelbinstance['id']
         # Gonna specify our own name, not use the AWS name..
         #applicationelbtargetgroupinstance['name'] = targetgroup.target_group_name
         applicationelbtargetgroupinstance['arn'] = targetgroup.target_group_arn
@@ -485,7 +487,32 @@ EOS
     end
 
     $outputmetrics["#{awsservice}"].each do |metricname, stattype|
-    $json_in += <<-EOS
+      # HACK HACK HACK! Have to specify two dimensions for ApplicationELB Targets.. so do an if statement here.
+      # TODO: FIX THIS. Duplication == BAD.
+      if awsservice.downcase == "applicationelb-target"
+        $json_in += <<-EOS
+      {
+        "OutputAlias": "#{outputalias}",
+        "Namespace": "AWS/#{outputawsservice}",
+        "MetricName": "#{metricname}",
+        "Period": #{period},
+        "Statistics": [
+          "#{stattype}"
+        ],
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": "#{instance["parentid"]}",
+          },
+          {
+            "Name": "#{dimensionname}",
+            "Value": "#{instance["id"]}",
+          }
+        ]
+      },
+EOS
+      else
+        $json_in += <<-EOS
       {
         "OutputAlias": "#{outputalias}",
         "Namespace": "AWS/#{outputawsservice}",
@@ -502,7 +529,7 @@ EOS
         ]
       },
 EOS
-
+      end
     end
   end
   $json_in += <<-EOS
