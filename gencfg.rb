@@ -330,6 +330,7 @@ end
 # TODO: Add additional logic to support parsing stats for each target under an ALB
 def generate_config_ApplicationELB(awsregion,awsservice)
   applicationelbinstances = Array.new
+  applicationelbtargetgroupinstances = Array.new
 
   Aws.config.update({
     region: "#{awsregion}",
@@ -379,12 +380,39 @@ def generate_config_ApplicationELB(awsregion,awsservice)
         end
       end
 
+      # Iterate over the target groups..
+      applicationelb.describe_target_groups( { load_balancer_arn: "#{instancearn}" }).target_groups.each do |targetgroup|
+        applicationelbtargetgroupinstance = Hash.new
+        # Specify parent ELB, for use in the json building exercise
+        applicationelbtargetgroupinstance['parent'] = instancename
+        # Gonna specify our own name, not use the AWS name..
+        #applicationelbtargetgroupinstance['name'] = targetgroup.target_group_name
+        applicationelbtargetgroupinstance['arn'] = targetgroup.target_group_arn
+        # The Target group ID is the last section of the ARN, with sections separate by colons.
+        applicationelbtargetgroupinstance['id'] = applicationelbtargetgroupinstance['arn'].rpartition(':').last
+        applicationelbtargetgroupinstance["tags"] = Hash.new
+        tags = applicationelb.describe_tags({ resource_arns: [ "#{applicationelbtargetgroupinstance['arn']}" ] }).tag_descriptions.each do |tags|
+          tags.tags.each do |tag|
+            applicationelbtargetgroupinstance["tags"]["#{tag.key}"]  = "#{tag.value}"
+          end
+        end
+
+        # Take the name tag, strip off the application elb name from the front, and use it as our name..
+        instancenamestrippedalb = instancename.sub('alb','')
+        applicationelbtargetgroupinstance['name'] = applicationelbtargetgroupinstance["tags"]["Name"].sub(instancenamestrippedalb,'')
+
+        applicationelbtargetgroupinstances.push(applicationelbtargetgroupinstance)
+      end
+
       applicationelbinstances.push(applicationelbinstance)
     end
   end
 
   dimensionname = $dimensionname["#{awsservice}"]
   buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
+
+  # Build JSON for target groups
+  buildjson(awsregion,applicationelbtargetgroupinstances,"ApplicationELB-Target","detailed",60,"TargetGroup")
 end
 
 # Output config file for DMS for a given region
@@ -397,8 +425,6 @@ def generate_config_DMS(awsregion,awsservice)
 
   dms = Aws::DatabaseMigrationService::Client.new(region: awsregion)
   dms.describe_replication_instances.replication_instances.each do |instances|
-    #puts instances
-    #puts instances.replication_instance_identifier
     #instances.each do |instance|
       unless $skipinstances.nil?
         unless $skipinstances['DMS'].nil?
@@ -441,16 +467,20 @@ EOS
 
     if awsservice.downcase == "ebs"
       outputalias = "#{monitoring}.#{instance["name"].downcase}.#{instance["blockdev"].gsub('/dev/','')}"
+    elsif awsservice.downcase == "applicationelb-target"
+      outputalias="#{monitoring}.#{instance["parent"].downcase}.targets.#{instance["name"].downcase}"
     else
       outputalias = "#{monitoring}.#{instance["name"].downcase}"
     end
 
     # With ALB/ELBv2/ApplicationELB, AWS started breaking the rule of namespace being in all caps..
     # So, do hacks to support that.
-    if awsservice.downcase != "applicationelb"
-      outputawsservice = awsservice.upcase
-    else
+    if awsservice.downcase == "applicationelb"
       outputawsservice = "ApplicationELB"
+    elsif awsservice.downcase == "applicationelb-target"
+      outputawsservice = "ApplicationELB"
+    else
+      outputawsservice = awsservice.upcase
     end
 
     $outputmetrics["#{awsservice}"].each do |metricname, stattype|
