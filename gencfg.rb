@@ -418,6 +418,96 @@ def generate_config_ApplicationELB(awsregion,awsservice)
   buildjson(awsregion,applicationelbtargetgroupinstances,"ApplicationELB-Target","detailed",60,"TargetGroup")
 end
 
+# Output config file for ElastiCache for a given region
+# TODO: Check state of cluster before trying to generate configs.
+def generate_config_ElastiCache(awsregion,awsservice)
+  elasticacheinstances = Array.new
+  elasticachenodeinstancesredis = Array.new
+  elasticachenodeinstancesmemcache = Array.new
+
+  Aws.config.update({
+    region: "#{awsregion}",
+  })
+
+  elasticache = Aws::ElastiCache::Client.new(region: awsregion)
+  elasticache.describe_cache_clusters({ show_cache_node_info: true }).each do |instances|
+    instances.cache_clusters.each do |instance|
+      instanceid = instance.cache_cluster_id
+
+      unless $skipinstances.nil?
+        unless $skipinstances['ElastiCache'].nil?
+          if $skipinstances['ElastiCache'].include? "#{instanceid}"
+            $log.debug("Skipping config for: #{instanceid} (on skipinstances list)")
+            next
+          end
+        end
+      end
+
+      elasticacheinstance = Hash.new
+      elasticacheinstance['id'] = instanceid
+      elasticacheinstance['arn'] = "arn:aws:elasticache:#{awsregion}:#{$awsaccountnumber}:cluster:#{instanceid}"
+      elasticacheinstance["tags"] = Hash.new
+      elasticache.list_tags_for_resource({ resource_name: "#{elasticacheinstance['arn']}" }).tag_list.each do |tags|
+        elasticacheinstance["tags"]["#{tags.key}"]  = "#{tags.value}"
+      end
+      elasticacheinstance['name'] = elasticacheinstance["tags"]["Name"]
+
+      # TODO: What's the right way to figure out if both a parent and child are null?
+      unless $matchtags.nil?
+        unless $matchtags['ElastiCache'].nil?
+          # Default to excluding the instance; we'll set this to true if the instance matches one or more of the sets of tags.
+          includeinstance=false
+
+          $matchtags['ElastiCache'].each do |matchtag|
+            includeinstance=true if elasticacheinstance["tags"].contain?( matchtag )
+          end
+
+          if (includeinstance == false)
+            $log.debug("Skipping config for: #{elasticacheinstance['name']} (matchtags doesn't include a tag for it)")
+            next
+          end
+        end
+      end
+
+      # Iterate over the nodes..
+      instance.cache_nodes.each do |cache_node|
+        elasticachenodeinstance = Hash.new
+        # Cache Node ID
+        elasticachenodeinstance['id'] = cache_node.cache_node_id
+        # Re-use the ID (which will be something like '0001') as the name too..
+        elasticachenodeinstance['name'] = cache_node.cache_node_id
+        # Specify parent ELB, for use in the json building exercise
+        elasticachenodeinstance['parent'] = elasticacheinstance['name']
+        # Ugh. Also need to include parent id, as have to do two dimensions..
+        elasticachenodeinstance['parentid'] = elasticacheinstance['id']
+
+        if instance.engine.downcase == "memcached"
+          elasticachenodeinstancesmemcache.push(elasticachenodeinstance)
+        elsif instance.engine.downcase == "redis"
+          elasticachenodeinstancesredis.push(elasticachenodeinstance)
+        end
+      end
+
+      elasticacheinstances.push(elasticacheinstance)
+    end
+  end
+
+  puts elasticacheinstances.to_a
+  puts "-- MEMCACHE INSTANCES --"
+  puts elasticachenodeinstancesmemcache.to_a
+  puts "-- REDIS INSTANCES --"
+  puts elasticachenodeinstancesredis.to_a
+
+  dimensionname = $dimensionname["#{awsservice}"]
+  # Don't have to generate the top-level, no stats stored there..
+  #buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
+
+  # Generate JSON for Memcache nodes
+  buildjson(awsregion,elasticachenodeinstancesmemcache,"ElastiCache-Node-Memcache","detailed",60,"CacheNodeId")
+  # Generate JSON for Redis nodes
+  buildjson(awsregion,elasticachenodeinstancesredis,"ElastiCache-Node-Redis","detailed",60,"CacheNodeId")
+end
+
 # Output config file for DMS for a given region
 def generate_config_DMS(awsregion,awsservice)
   dmsinstances = Array.new
@@ -472,16 +562,25 @@ EOS
       outputalias = "#{monitoring}.#{instance["name"].downcase}.#{instance["blockdev"].gsub('/dev/','')}"
     elsif awsservice.downcase == "applicationelb-target"
       outputalias="#{monitoring}.#{instance["parent"].downcase}.targets.#{instance["name"].downcase}"
+    elsif awsservice.downcase == "elasticache-node-memcache"
+      outputalias="#{monitoring}.memcache.#{instance["parent"].downcase}.nodes.#{instance["name"].downcase}"
+    elsif awsservice.downcase == "elasticache-node-redis"
+      outputalias="#{monitoring}.redis.#{instance["parent"].downcase}.nodes.#{instance["name"].downcase}"
     else
       outputalias = "#{monitoring}.#{instance["name"].downcase}"
     end
 
     # With ALB/ELBv2/ApplicationELB, AWS started breaking the rule of namespace being in all caps..
     # So, do hacks to support that.
+    # Ditto for Elasticache..
     if awsservice.downcase == "applicationelb"
       outputawsservice = "ApplicationELB"
     elsif awsservice.downcase == "applicationelb-target"
       outputawsservice = "ApplicationELB"
+    elsif awsservice.downcase == "elasticache-node-memcache"
+      outputawsservice = "ElastiCache"
+    elsif awsservice.downcase == "elasticache-node-redis"
+      outputawsservice = "ElastiCache"
     else
       outputawsservice = awsservice.upcase
     end
@@ -502,6 +601,28 @@ EOS
         "Dimensions": [
           {
             "Name": "LoadBalancer",
+            "Value": "#{instance["parentid"]}",
+          },
+          {
+            "Name": "#{dimensionname}",
+            "Value": "#{instance["id"]}",
+          }
+        ]
+      },
+EOS
+      elsif ( awsservice.downcase =~ /^elasticache-node(.*)/ )
+        $json_in += <<-EOS
+      {
+        "OutputAlias": "#{outputalias}",
+        "Namespace": "AWS/#{outputawsservice}",
+        "MetricName": "#{metricname}",
+        "Period": #{period},
+        "Statistics": [
+          "#{stattype}"
+        ],
+        "Dimensions": [
+          {
+            "Name": "CacheClusterId",
             "Value": "#{instance["parentid"]}",
           },
           {
@@ -568,6 +689,8 @@ awsregions.each do |awsregion|
       generate_config_ELB(awsregion,awsservice)
     elsif (awsservice.downcase == "applicationelb")
       generate_config_ApplicationELB(awsregion,awsservice)
+    elsif (awsservice.downcase == "elasticache")
+      generate_config_ElastiCache(awsregion,awsservice)
     elsif (awsservice.downcase == "dms")
       generate_config_DMS(awsregion,awsservice)
     else

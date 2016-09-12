@@ -29,6 +29,7 @@
     "EBS": "VolumeId",
     "ELB": "LoadBalancerName",
     "ApplicationELB": "LoadBalancer",
+    "ElastiCache": "CacheClusterId",
     "DMS": "ReplicationInstanceIdentifier"
   },
   "outputmetrics": {
@@ -49,6 +50,12 @@
     },
     "ApplicationELB-Target": {
       "ActiveConnectionCount": "Sum", "ClientTLSNegotiationErrorCount": "Sum", "HealthyHostCount": "Average", "HTTPCode_ELB_4XX_Count": "Sum", "HTTPCode_ELB_5XX_Count": "Sum", "HTTPCode_Target_2XX_Count": "Sum", "HTTPCode_Target_3XX_Count": "Sum", "HTTPCode_Target_4XX_Count": "Sum", "HTTPCode_Target_5XX_Count": "Sum", "NewConnectionCount": "Sum", "ProcessedBytes": "Sum", "RejectedConnectionCount": "Sum", "RequestCount": "Sum", "TargetConnectionErrorCount": "Sum", "TargetResponseTime": "Average", "TargetTLSNegotiationErrorCount": "Sum", "UnhealthyHostCount": "Sum"
+    },
+    "ElastiCache-Node-Memcache": {
+      "CPUUtilization": "Average", "FreeableMemory": "Average", "SwapUsage": "Average", "CurrItems": "Average", "Evictions": "Average", "Reclaimed": "Average", "BytesUsedForCacheItems": "Average", "GetHits": "Average", "GetMisses": "Average", "NewItems": "Average"
+    },
+    "ElastiCache-Node-Redis": {
+      "CPUUtilization": "Average", "FreeableMemory": "Average", "SwapUsage": "Average"
     },
     "DMS": { "CPUCreditBalance": "Average", "CPUCreditUsage": "Average", "CPUUtilization": "Average", "DiskQueueDepth": "Average", "FreeStorageSpace": "Average", "FreeableMemory": "Average", "ReadIOPS": "Average", "ReadLatency": "Average", "ReadThroughput": "Average", "SwapUsage": "Average", "WriteIOPS": "Average", "WriteLatency": "Average", "WriteThroughput": "Average"
     }
