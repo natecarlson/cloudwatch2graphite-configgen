@@ -492,12 +492,6 @@ def generate_config_ElastiCache(awsregion,awsservice)
     end
   end
 
-  puts elasticacheinstances.to_a
-  puts "-- MEMCACHE INSTANCES --"
-  puts elasticachenodeinstancesmemcache.to_a
-  puts "-- REDIS INSTANCES --"
-  puts elasticachenodeinstancesredis.to_a
-
   dimensionname = $dimensionname["#{awsservice}"]
   # Don't have to generate the top-level, no stats stored there..
   #buildjson(awsregion,applicationelbinstances,"#{awsservice}","detailed",60,"#{dimensionname}")
