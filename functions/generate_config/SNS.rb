@@ -11,6 +11,6 @@ def generate_config_SNS(awsregion,awsservice)
   sns.list_topics
 
   sns.list_platform_applications.each do |endpoint|
-    puts endpoint[0]
+    ## TODO: Finish this you dummy
   end
 end
