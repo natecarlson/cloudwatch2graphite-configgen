@@ -71,12 +71,15 @@ def generate_config_ElastiCache(awsregion,awsservice)
         end
       when 'redis'
         elasticachenodeinstance = Hash.new
+        # We want to pretty up the data a bit to handle shards/nodes etc
+        id_match = instance.cache_cluster_id.match(/.*-(\d+)-(\d+)$/)
+        name_match = instance.cache_cluster_id.match(/(.*)-\d+-\d+$/)[1]
         # Cache Node ID
         elasticachenodeinstance['id'] = instance.cache_nodes[0].cache_node_id
         # Re-use the ID (which will be something like '0001') as the name too..
-        elasticachenodeinstance['name'] = instance.cache_cluster_id
+        elasticachenodeinstance['name'] = id_match[2]
         # Specify parent ELB, for use in the json building exercise
-        elasticachenodeinstance['parent'] = instance.cache_cluster_id 
+        elasticachenodeinstance['parent'] = "#{name_match}.#{id_match[1]}"
         # Ugh. Also need to include parent id, as have to do two dimensions..
         elasticachenodeinstance['parentid'] = instance.cache_cluster_id
 
