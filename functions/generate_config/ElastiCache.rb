@@ -71,15 +71,31 @@ def generate_config_ElastiCache(awsregion,awsservice)
         end
       when 'redis'
         elasticachenodeinstance = Hash.new
-        # We want to pretty up the data a bit to handle shards/nodes etc
-        id_match = instance.cache_cluster_id.match(/.*-(\d+)-(\d+)$/)
-        name_match = instance.cache_cluster_id.match(/(.*)-\d+-\d+$/)[1]
-        # Cache Node ID
+
+        # There are two cases to handle, cluster-enable=yes and cluster-enable=no
+        # For cluster-enabled, ElastiCache does the shard and node in the cache_cluster_id
+        if instance.cache_cluster_id.match(/(.*)-\d+-\d+$/).nil?
+          # We hit a cluster-enabled=no so shard needs to staticly be 0001 
+          ids_match = instance.cache_cluster_id.match(/.*-(\d+)$/)
+          shard = '0001'
+          display_id = ids_match[1]
+          # Strip out the name
+          display_name = instance.cache_cluster_id.match(/(.*)-\d+$/)[1]
+        else
+          # Strip out the shard and the node, both digits
+          ids_match = instance.cache_cluster_id.match(/.*-(\d+)-(\d+)$/)
+          shard = ids_match[1]
+          display_id = ids_match[2]
+          # Strip out the name
+          display_name = instance.cache_cluster_id.match(/(.*)-\d+-\d+$/)[1]
+        end
+        
+        # Actual Cache Node ID for API
         elasticachenodeinstance['id'] = instance.cache_nodes[0].cache_node_id
-        # Re-use the ID (which will be something like '0001') as the name too..
-        elasticachenodeinstance['name'] = id_match[2]
-        # Specify parent ELB, for use in the json building exercise
-        elasticachenodeinstance['parent'] = "#{name_match}.#{id_match[1]}"
+        # Display Name of this Cache Node ID for buildjson
+        elasticachenodeinstance['name'] = display_id
+        # Specify Parent, like name and shard for use in the json building exercise
+        elasticachenodeinstance['parent'] = "#{display_name}.#{shard}"
         # Ugh. Also need to include parent id, as have to do two dimensions..
         elasticachenodeinstance['parentid'] = instance.cache_cluster_id
 
